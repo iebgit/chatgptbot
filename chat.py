@@ -1,3 +1,4 @@
+import sys
 from tkinter import *
 import customtkinter
 import openai
@@ -8,25 +9,24 @@ import playsound
 import pyaudio
 import wave
 import speech_recognition as sr
-
+import threading
 
 root = customtkinter.CTk()
-root.title("ChatGPT Bot")
-root.geometry("600x560")
+root.title("oracleGPT")
+root.geometry("620x620")
 root.iconbitmap("ai_lt.ico")
 
 # set color scheme
+color = "dark-blue"
 customtkinter.set_appearance_mode("dark")
-customtkinter.set_default_color_theme("dark-blue")
-
-# submit to chatGPT
+customtkinter.set_default_color_theme(color)
 
 # Language in which you want to convert
 language = 'en'
-
+event = threading.Event()
 
 def record_audio():
-    chunk = 5  # Record in chunks of 1024 samples
+    chunk = 1024  # Record in chunks of 1024 samples
     sample_format = pyaudio.paInt16  # 16 bits per sample
     channels = 2
     fs = 44100  # Record at 44100 samples per second
@@ -78,15 +78,45 @@ def read_audio(filename):
         return r.recognize_google(audio_data)
 
 
+def run_assistant(event):
+    state = True
+    my_text.insert(END, f"Listening...\n\n")
+    while state:
+        r = sr.Recognizer()
+        with sr.Microphone() as source:
+            print("Tell me something:")
+            audio = r.listen(source)
+            print(audio)
+            if audio:
+                try:
+                    text = r.recognize_google(audio)
+                    print(text)
+                    if event.is_set():
+                        my_text.insert(END, f"\n\nStopped Listening\n\n")
+                        return
+                    if "oracle" in text.lower():
+                        my_text.insert(END, f"\n\n{text}\n\n")
+                        bot_read("api_key", text)
+                    elif "stop listening" in text.lower():
+                        my_text.insert(END, f"\n\nStopped Listening\n\n")
+                        return
+                    elif "clear the screen" in text.lower():
+                        clear()
+                except sr.UnknownValueError:
+                    print("Could not understand audio")
+            else:
+                my_text.insert(END, f"\n\nStopped Listening\n\n")
+                return
+
+
+def listen():
+    threading.Thread(target=run_assistant, args=(event,)).start()
+
+
 def speak():
     if chat_entry.get():
         filename = "api_key"
         bot_read(filename, chat_entry.get())
-    else:
-        record_audio()
-        filename = "api_key"
-        bot_read(filename, read_audio("output.wav"))
-        os.remove("output.wav")
 
 
 def bot_read(filename, text):
@@ -111,10 +141,9 @@ def bot_read(filename, text):
                 frequency_penalty=0.0,
                 presence_penalty=0.0,
             )
-
+            print(response)
             res = (response["choices"][0]["text"]).strip()
-            my_text.insert(END, res)
-            my_text.insert(END, "\n\n")
+            my_text.insert(END, f"{res}\n\n")
             text_to_speech(res)
 
         else:
@@ -123,8 +152,7 @@ def bot_read(filename, text):
             my_text.insert(END, "\n\nChatGPT requires an API key.")
 
     except Exception as e:
-        my_text.insert(END, f"\n\nAn error occurred: \n\n{e}")
-# submit to chatGPT
+        print(f"\n\nAn error occurred: \n\n{e}")
 
 
 def text_to_speech(res):
@@ -132,13 +160,20 @@ def text_to_speech(res):
     # here we have marked slow=False. Which tells
     # the module that the converted audio should
     # have a high speed
-    myobj = gTTS(text=res, lang=language, slow=False)
-    # Saving the converted audio in a mp3 file named
-    filename = "response.mp3"
-    myobj.save(filename)
-    # Playing the converted file
-    playsound.playsound(filename)
-    os.remove(filename)
+    try:
+        engine = gTTS(text=res, lang=language, slow=False)
+        # Saving the converted audio in a mp3 file named
+        filename = "response.mp3"
+        engine.save(filename)
+
+        # Playing the converted file
+        playsound.playsound(filename)
+        os.remove("response.mp3")
+
+
+    except:
+        print("An Error Occurred")
+        text_to_speech(res)
 
 
 def clear():
@@ -146,9 +181,6 @@ def clear():
     my_text.delete(1.0, END)
     # clear entry box
     chat_entry.delete(0, END)
-
-
-# submit to chatGPT
 
 
 def key():
@@ -168,10 +200,16 @@ def key():
             input_file.close()
 
     except Exception as e:
-        my_text.insert(END, f"\n\nAn error occurred:\n\n{e}")
+        print(f"\n\nAn error occurred:\n\n{e}")
 
     root.geometry("600x660")
     api_frame.pack(pady=10)
+
+
+def end():
+    root.destroy()
+    sys.exit()
+
 
 
 # submit to chatGPT
@@ -187,7 +225,7 @@ def save_key():
         customtkinter.set_default_color_theme("dark-blue")
 
     except Exception as e:
-        my_text.insert(END, f"\n\nAn error occurred:\n\n{e}")
+        print(f"\n\nAn error occurred:\n\n{e}")
 
 
 # Add text frame
@@ -216,7 +254,7 @@ my_text.configure(yscrollcommand=text_scroll.set)
 
 # entry widget
 chat_entry = customtkinter.CTkEntry(root,
-                                    placeholder_text="Click submit to record audio.",
+                                    placeholder_text="Allow the oracle to listen or submit text...",
                                     width=535,
                                     height=50,
                                     border_width=1)
@@ -232,15 +270,28 @@ submit_button = customtkinter.CTkButton(button_frame,
                                         command=speak)
 submit_button.grid(row=0, column=0, padx=24)
 
-clear_button = customtkinter.CTkButton(button_frame,
-                                       text="Clear Response",
-                                       command=clear)
-clear_button.grid(row=0, column=2, padx=24)
+listen_button = customtkinter.CTkButton(button_frame,
+                                        text="Listen",
+                                        command=listen)
+listen_button.grid(row=1, column=0, padx=24, pady=10)
+
 
 api_button = customtkinter.CTkButton(button_frame,
                                      text="Update API Key",
                                      command=key)
-api_button.grid(row=0, column=3, padx=24)
+api_button.grid(row=0, column=1, padx=24, pady=10)
+
+clear_button = customtkinter.CTkButton(button_frame,
+                                       text="Clear",
+                                       command=clear)
+clear_button.grid(row=1, column=1, padx=24)
+
+exit_button = customtkinter.CTkButton(button_frame,
+                                      fg_color=("black", "black"),
+                                      text="Exit",
+                                      command=end)
+
+exit_button.grid(row=0, column=2, padx=24, pady=10)
 
 # api frame
 api_frame = customtkinter.CTkFrame(root, border_width=1)
@@ -256,5 +307,4 @@ api_save_button = customtkinter.CTkButton(api_frame,
                                           text="Save Key",
                                           command=save_key)
 api_save_button.grid(row=0, column=1, padx=10)
-
 root.mainloop()
