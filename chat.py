@@ -12,7 +12,7 @@ import speech_recognition as sr
 import threading
 
 root = customtkinter.CTk()
-root.title("oracleGPT")
+root.title("OracleGPT")
 root.geometry("620x620")
 root.iconbitmap("ai_lt.ico")
 
@@ -21,9 +21,12 @@ color = "dark-blue"
 customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme(color)
 
+
+
 # Language in which you want to convert
 language = 'en'
 event = threading.Event()
+
 
 def record_audio():
     chunk = 1024  # Record in chunks of 1024 samples
@@ -78,39 +81,44 @@ def read_audio(filename):
         return r.recognize_google(audio_data)
 
 
-def run_assistant(event):
+def run_assistant():
     state = True
-    my_text.insert(END, f"Listening...\n\n")
+    my_text.insert(END, f"Establishing mic feed...\n\n")
     while state:
         r = sr.Recognizer()
-        with sr.Microphone() as source:
-            print("Tell me something:")
-            audio = r.listen(source)
-            print(audio)
-            if audio:
-                try:
-                    text = r.recognize_google(audio)
-                    print(text)
-                    if event.is_set():
-                        my_text.insert(END, f"\n\nStopped Listening\n\n")
-                        return
-                    if "oracle" in text.lower():
-                        my_text.insert(END, f"\n\n{text}\n\n")
-                        bot_read("api_key", text)
-                    elif "stop listening" in text.lower():
-                        my_text.insert(END, f"\n\nStopped Listening\n\n")
-                        return
-                    elif "clear the screen" in text.lower():
-                        clear()
-                except sr.UnknownValueError:
-                    print("Could not understand audio")
-            else:
-                my_text.insert(END, f"\n\nStopped Listening\n\n")
-                return
+        if 'normal' == root.state():
+            with sr.Microphone() as source:
+                print("Tell me something:")
+                audio = r.listen(source)
+                print(audio)
+                if audio:
+                    my_text.insert(END, f"Listening...\n\n")
+                    try:
+                        text = r.recognize_google(audio)
+                        print(text)
+                        if event.is_set():
+                            my_text.insert(END, f"\n\nStopped Listening\n\n")
+                            return
+                        if "oracle" in text.lower():
+                            my_text.insert(END, f"\n\n{text}\n\n")
+                            bot_read("api_key", text)
+                        elif "stop listening" in text.lower():
+                            my_text.insert(END, f"\n\nStopped Listening\n\n")
+                            return
+                        elif "clear the screen" in text.lower():
+                            clear()
+                    except sr.UnknownValueError:
+                        print("Could not understand audio")
+                else:
+
+                    return
+        else:
+            print("Stopped Listening")
+            return
 
 
 def listen():
-    threading.Thread(target=run_assistant, args=(event,)).start()
+    assistant.start()
 
 
 def speak():
@@ -169,10 +177,8 @@ def text_to_speech(res):
         # Playing the converted file
         playsound.playsound(filename)
         os.remove("response.mp3")
-
-
-    except:
-        print("An Error Occurred")
+    except Exception as e:
+        print(f"\n\nAn error occurred: \n\n{e}")
         text_to_speech(res)
 
 
@@ -202,7 +208,7 @@ def key():
     except Exception as e:
         print(f"\n\nAn error occurred:\n\n{e}")
 
-    root.geometry("600x660")
+    root.geometry("620x720")
     api_frame.pack(pady=10)
 
 
@@ -211,8 +217,6 @@ def end():
     sys.exit()
 
 
-
-# submit to chatGPT
 def save_key():
     filename = "api_key"
     try:
@@ -221,13 +225,14 @@ def save_key():
         pickle.dump(api_entry.get(), output_file)
         api_entry.delete(0, END)
         api_frame.pack_forget()
-        root.geometry("600x560")
+        root.geometry("620x620")
         customtkinter.set_default_color_theme("dark-blue")
 
     except Exception as e:
         print(f"\n\nAn error occurred:\n\n{e}")
 
 
+assistant = threading.Thread(target=run_assistant)
 # Add text frame
 text_frame = customtkinter.CTkFrame(root)
 text_frame.pack(pady=20)
@@ -279,12 +284,12 @@ listen_button.grid(row=1, column=0, padx=24, pady=10)
 api_button = customtkinter.CTkButton(button_frame,
                                      text="Update API Key",
                                      command=key)
-api_button.grid(row=0, column=1, padx=24, pady=10)
+api_button.grid(row=1, column=1, padx=24, pady=10)
 
 clear_button = customtkinter.CTkButton(button_frame,
                                        text="Clear",
                                        command=clear)
-clear_button.grid(row=1, column=1, padx=24)
+clear_button.grid(row=0, column=1, padx=24)
 
 exit_button = customtkinter.CTkButton(button_frame,
                                       fg_color=("black", "black"),
