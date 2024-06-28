@@ -157,7 +157,11 @@ def bot_read(filename, text):
         else:
             input_file = open(filename, "wb")
             input_file.close()
+            os.remove("api_key")
             my_text.insert(END, "\n\nChatGPT requires an API key.")
+            if len(text) > 2:
+                my_text.insert(END, f"\nReading your input aloud...\n\n{text}")
+                text_to_speech(text)
 
     except Exception as e:
         print(f"\n\nAn error occurred: \n\n{e}")
