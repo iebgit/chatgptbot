@@ -16,12 +16,12 @@ root.title("OracleGPT")
 root.geometry("620x620")
 root.iconbitmap("ai_lt.ico")
 
+no_api = 0
+
 # set color scheme
 color = "dark-blue"
 customtkinter.set_appearance_mode("dark")
 customtkinter.set_default_color_theme(color)
-
-
 
 # Language in which you want to convert
 language = 'en'
@@ -128,6 +128,7 @@ def speak():
 
 
 def bot_read(filename, text):
+    global no_api
     try:
         if os.path.isfile(filename):
             # open the file
@@ -158,9 +159,12 @@ def bot_read(filename, text):
             input_file = open(filename, "wb")
             input_file.close()
             os.remove("api_key")
-            my_text.insert(END, "\n\nChatGPT requires an API key.")
+           
+            if not no_api:
+                my_text.insert(END, "\n\nChatGPT requires an API key. Read aloud mode activated")
+                no_api = 1
             if len(text) > 2:
-                my_text.insert(END, f"\nReading your input aloud...\n\n{text}")
+                my_text.insert(END, f"\n\n{text}")
                 text_to_speech(text)
 
     except Exception as e:
