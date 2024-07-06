@@ -7,6 +7,7 @@ from gtts import gTTS
 import playsound
 import speech_recognition as sr
 import threading
+import pyttsx3
 
 
 root = customtkinter.CTk()
@@ -16,6 +17,8 @@ root.iconbitmap("ai_lt.ico")
 
 no_api = 0
 session_tokens = 0
+options_active = False
+male_voice = False
 
 # set color scheme
 color = "dark-blue"
@@ -82,6 +85,33 @@ def speak():
         bot_read(filename, chat_entry.get())
 
 
+def get_response(code, text):
+    try:
+        # add api key
+        client = OpenAI(
+            api_key=code
+        )
+
+        response = client.chat.completions.create(
+            messages=[
+                {
+                    "role": "user",
+                    "content": text,
+                }
+            ],
+            model="gpt-3.5-turbo",
+        )
+
+        return response
+    except Exception as e:
+        print(e)
+        input_file = open("api_key", "wb")
+        input_file.close()
+        os.remove("api_key")
+        
+        return False
+
+                
 def bot_read(filename, text):
     global no_api
     global session_tokens
@@ -93,25 +123,22 @@ def bot_read(filename, text):
             # load the data from the file into a variable
             stuff = pickle.load(input_file)
 
-            # add api key
-            client = OpenAI(
-                api_key=stuff
-            )
-
-            response = client.chat.completions.create(
-                messages=[
-                    {
-                        "role": "user",
-                        "content": text,
-                    }
-                ],
-                model="gpt-3.5-turbo",
-            )
-            text_response = (response.choices[0].message.content)
-            total_tokens = (response.usage.total_tokens)
-            session_tokens = session_tokens + total_tokens
-            my_text.insert(END, f"{text_response} [current - {total_tokens}, total - {session_tokens}]\n\n")
-            text_to_speech(text_response)
+            if "sk-proj" not in stuff:
+                input_file = open(filename, "wb")
+                input_file.close()
+                os.remove("api_key")
+            else:
+                response = get_response(stuff, text)
+                if response:
+                    clear()
+                    text_response = (response.choices[0].message.content)
+                    total_tokens = (response.usage.total_tokens)
+                    session_tokens = session_tokens + total_tokens
+                    my_text.insert(END, f"{text_response} [current - {total_tokens}, total - {session_tokens}]\n\n")
+                    text_to_speech(text_response)
+                else:
+                    my_text.insert(END, "API key error!\n")
+                    return
 
         else:
             input_file = open(filename, "wb")
@@ -119,31 +146,46 @@ def bot_read(filename, text):
             os.remove("api_key")
            
             if not no_api:
-                my_text.insert(END, "\n\nChatGPT requires an API key. Read aloud mode activated:")
+                my_text.insert(END, "\nChatGPT requires an API key. Read aloud mode activated:")
                 no_api = 1
+                os.remove("api_key")
             if len(text) > 2:
-                my_text.insert(END, f"\n\n{text}")
+                my_text.insert(END, f"\n{text}")
                 text_to_speech(text)
 
     except Exception as e:
-        print(f"\nAn error occurred: \n\n{e}")
-        my_text.insert(END, f"\n{e}")
+        print(f"\nAn error occurred in reading text: \n{e}")
+        os.remove(filename)
 
 
 def text_to_speech(res):
+    global male_voice
     # Passing the text and language to the engine,
     # here we have marked slow=False. Which tells
     # the module that the converted audio should
     # have a high speed
     try:
-        engine = gTTS(text=res, lang=language, slow=False)
-        # Saving the converted audio in a mp3 file named
-        filename = "response.mp3"
-        engine.save(filename)
+        if male_voice == 1:
+            engine = pyttsx3.init()
 
-        # Playing the converted file
-        playsound.playsound(filename)
-        os.remove("response.mp3")
+            # Set properties before adding anything to speak
+            engine.setProperty('rate', 150)  # Speed percent (can go over 100)
+            engine.setProperty('volume', 0.9)  # Volume 0-1
+        
+            # Adding text to speak
+            engine.say(res)
+            
+            # Blocks while processing all the currently queued commands
+            engine.runAndWait()
+            engine.stop()
+        else:
+            engine = gTTS(text=res, lang=language, slow=False)
+            # Saving the converted audio in a mp3 file named
+            filename = "response.mp3"
+            engine.save(filename)
+            
+            playsound.playsound(filename)
+            os.remove("response.mp3")
     except Exception as e:
         print(f"\nAn error occurred: \n{e}")
         text_to_speech(res)
@@ -157,11 +199,14 @@ def clear():
 
 
 def key():
+    global options_active
     filename = "api_key"
     try:
         if os.path.isfile(filename):
             # open the file
             input_file = open(filename, 'rb')
+
+            print(input_file)
 
             # load the data from the file into a variable
             stuff = pickle.load(input_file)
@@ -171,13 +216,25 @@ def key():
         else:
             input_file = open(filename, "wb")
             input_file.close()
+            print(input_file)
 
     except Exception as e:
         print(f"\nAn error occurred:\n{e}")
 
     root.geometry("620x720")
     api_frame.pack(pady=10)
+    options_active = 1
 
+
+def options():
+    global options_active
+    if options_active:
+        root.geometry("620x620")
+        options_active = 0
+    else:
+        key()
+
+    
 
 def end():
     root.destroy()
@@ -196,7 +253,13 @@ def save_key():
         customtkinter.set_default_color_theme("dark-blue")
 
     except Exception as e:
-        print(f"\n\nAn error occurred:\n\n{e}")
+        print(f"\n\nAn error occurred while saving the key:\n\n{e}")
+
+
+def change_voice():
+    global male_voice
+    male_voice = not male_voice
+    my_text.insert(END, f"\nMale Voice: {male_voice}\n")
 
 
 
@@ -245,24 +308,24 @@ submit_button.grid(row=0, column=0, padx=24)
 listen_button = customtkinter.CTkButton(button_frame,
                                         text="Listen",
                                         command=listen)
-listen_button.grid(row=1, column=0, padx=24, pady=10)
+listen_button.grid(row=0, column=1, padx=24, pady=10)
 
 
 api_button = customtkinter.CTkButton(button_frame,
-                                     text="Update API Key",
-                                     command=key)
-api_button.grid(row=1, column=1, padx=24, pady=10)
+                                     text="Options",
+                                     command=options)
+api_button.grid(row=0, column=2, padx=24, pady=10)
 
 clear_button = customtkinter.CTkButton(button_frame,
                                        text="Clear",
                                        command=clear)
-clear_button.grid(row=0, column=1, padx=24)
+clear_button.grid(row=1, column=0, padx=24)
 
 stop_button = customtkinter.CTkButton(button_frame,
                                       text="Stop",
                                       command=stop)
 
-stop_button.grid(row=0, column=2, padx=24, pady=10)
+stop_button.grid(row=1, column=1, padx=24, pady=10)
 
 exit_button = customtkinter.CTkButton(button_frame,
                                       fg_color=("", "black"),
@@ -271,17 +334,23 @@ exit_button = customtkinter.CTkButton(button_frame,
 
 exit_button.grid(row=1, column=2, padx=24, pady=10)
 # api frame
-api_frame = customtkinter.CTkFrame(root, border_width=1)
+api_frame = customtkinter.CTkFrame(root, fg_color="#242424")
 api_frame.pack(pady=10)
 
 # APi entry widget
 api_entry = customtkinter.CTkEntry(api_frame, placeholder_text="Enter API Key",
-                                   width=350, height=50, border_width=1)
-api_entry.grid(row=0, column=0, padx=20, pady=20)
+                                   width=200, height=50, border_width=1)
+api_entry.grid(row=0, column=0, padx=10, pady=5)
 
 # Add api button
 api_save_button = customtkinter.CTkButton(api_frame,
                                           text="Save Key",
                                           command=save_key)
 api_save_button.grid(row=0, column=1, padx=10)
+# Add api button
+voice_button = customtkinter.CTkButton(api_frame,
+                                          text="Change Voice",
+                                          command=change_voice)
+voice_button.grid(row=0, column=2, padx=10, pady=10)
+
 root.mainloop()
